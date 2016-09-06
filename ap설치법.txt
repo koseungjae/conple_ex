@@ -1,0 +1,23 @@
+1. war파일 생성
+
+2. 117외부
+
+3. 컨플ap
+
+4. 디비백업 rolename : postgres
+
+5. 로컬 postgres에 conple_ap db 생성
+
+6. 원격제어pc에 war파일 백업폴더(war_bak)생성후 백업(c://programfiles/apache software foundation)
+
+7. site_info에서 ip경로를 로컬로 맞추기
+
+8. 유저정보 변경(상담원 내선번호에 맞춰서)
+
+9. 백업시켜놓은 war파일 : c://programfiles/apache software foundation/tomcat7.0/webapp 아래에 war파일 복사(자동압축해제)
+
+10. db_info.xml 에서 로컬로 경로변경
+
+11. tomcat/conf/server.xml에서 인코딩 utf-8확인
+
+12. 로컬로 ap접속해서 화면깨짐 확인

@@ -1,0 +1,471 @@
+/* 전역변수 설정 */
+var userManageForm, popupForm;
+var userManageGrid;
+var popupGrid = null;
+var comboSearchCombo, searchAuthor, searchSex;
+
+/* Date 설정 */
+var currentDateClock = (new Date().format("yyyy-MM-dd HH:mm"));
+var currentDate =  (new Date().format("yyyy-MM-dd"));
+var currentMonth =  (new Date().format("yyyy-MM"));
+var currentClock = (new Date().format("HH:mm"));
+var currentHourClock = (new Date().format("HH"));
+
+/*백스페이스 방지 */
+$(document).on("keydown", function (e) {
+	if (e.which === 8 && !($(e.target).is("input, textarea") && ( $(e.target).attr("readOnly") == undefined || $(e.target).attr("readOnly").toUpperCase() != "READONLY" ) )) {
+	e.preventDefault();
+	}
+});
+
+//빈 값인지 확인
+function isEmpty(value) {
+	return !value || !value.length;
+}
+
+/** 폼 그려주는 메서드 */
+function createForm(xmlNodeName, objForm){
+
+	var init = window.dhx4.ajax.getSync(contextPath+"/formXml?xmlNodeName="+xmlNodeName);
+   	var resXml = init.xmlDoc.responseXML;
+
+   	formXml = onParseMsg($(resXml).find(xmlNodeName).text());
+   	objForm = new dhtmlXForm(objForm, jQuery.parseJSON(formXml));
+   	objForm.setSkin(skin);
+
+   	return objForm;
+}
+
+/** 그리드 그려주는 메서드 */
+function createGrid(objGrid, objPaging, url, excelFileName){
+	objGrid = new dhtmlXGridObject(objGrid);
+	objGrid.setImagePath(compoResourcePath+"/dhtmlxSuite/skins/"+defaultSkin+"/imgs/");
+	objGrid.i18n.paging = eval("i18nPaging."+locale);
+	objGrid.enablePaging(true,30, 5, objPaging, true);
+	objGrid.setPagingWTMode(true,true,true,[30,60,90,100]);
+	objGrid.setPagingSkin("toolbar", skin);
+	objGrid.enableColumnAutoSize(false);
+	objGrid.enablePreRendering(50);
+	objGrid.setSkin(skin);
+	objGrid.init();
+	objGrid.load(contextPath+"/"+url+".xml", function(){
+
+		excelDown(objGrid, excelFileName);
+
+	});
+	return objGrid;
+}
+
+/** 그리드 조건으로 로드해주는 메서드 */
+function loadGrid(keyword, comboValue){
+	var strData = "";
+
+	//if(userManageForm.getValue("searchInput") != null && userManageForm.getValue("searchInput") != ""){
+	if(!isEmpty(keyword)){
+		strData = "?searchWord=" + keyword;
+	}
+	//if(userManageForm.getValue("searchCombo") != null && userManageForm.getValue("searchCombo") != ""){
+	if(!isEmpty(comboValue)){
+		strData += (strData.length > 0?"&":"?") + "searchType=" + comboValue;
+	}
+
+	userManageGrid.clearAndLoad(contextPath+"/userManageGrid.xml"+encodeURI(strData), function(){});
+}
+
+/** 페이징에 엑셀 다운 붙여주는 메서드*/
+function excelDown(gridObj, excelFileName){
+
+	gridObj.aToolBar.addButton('excelDownload',8, $("#fccrmcommonbtn3excelDown").val(), 'icon_excel_download.svg', 'icon_excel_download.svg');
+	gridObj.aToolBar.addSpacer("perpagenum");
+
+	if(excelYn != 'Y')
+		gridObj.aToolBar.hideItem("excelDownload");
+
+	/** 페이징 버튼 클릭 이벤트 */
+	gridObj.aToolBar.attachEvent("onClick", function(id){
+		/* 엑셀 저장 버튼 */
+		if (id == "excelDownload"){
+			//statisticsGrid3.setColumnHidden(0,true); // 체크 컬럼 안 보이게
+			gridObj.toExcel(contextPath+"/generateExcel.do?fileName=" + excelFileName);
+			//statisticsGrid3.setColumnHidden(0,false); // 체크 컬럼 다시 보이게
+		}
+	});
+
+}
+
+/** 폼 이벤트 정의 */
+function formFunction(){
+
+	userManageForm.attachEvent("onButtonClick", function(name){
+	     switch(name){
+	     case "searchBtn" :
+	    	 var keyword = userManageForm.getValue("searchWord");
+	    	 var comboValue = userManageForm.getValue("searchType");
+	    	 if(isEmpty(keyword)) {
+	    		 userManageGrid.clearAndLoad(contextPath+"/userManageGrid.xml", function(){});
+	    		 }else {
+	    		 loadGrid(keyword, comboValue);
+	    		 }
+	    	 break;
+	     case "addBtn" :
+	    	 popupForm = createForm("userInfoAddPopupForm" , "popupForm");
+
+	    	 // 팝업창 제목 변경
+	    	 $( ".cp_popup_title span" ).text("사용자정보 추가");
+
+	    	 userManageForm.setItemFocus("searchType");
+
+	    	 popupForm.hideItem("modifyBtn");
+
+	    	 comboLoad(name);
+
+	    	 popupForm.attachEvent("onButtonClick",function(name){
+	    		 switch(name){
+	    		 	case "addBtn" :
+	    		 		if(validityCheck()){
+	    		 			insertUserInfo(popupForm);
+	    		 		}
+	    		 	break;
+	    		 }
+	    	});
+	    	 popupForm.attachEvent("onKeyDown",function(inp, ev, name){
+	    		 if(ev.keyCode == 13 && popupForm.isItemHidden("modifyBtn") == true){
+	    			 if(validityCheck()){
+	    				 insertUserInfo(popupForm);
+	    				 }
+	    			 }
+	    		 });
+	    	 cpPopup("cp_popup_content");
+
+	    	 break;
+
+	     case "modifyBtn" :
+	    	 var rowID = userManageGrid.getSelectedRowId();
+
+	    	// 팝업창 제목 변경
+			$( ".cp_popup_title span" ).text("사용자정보 수정");
+
+	    	 userManageForm.setItemFocus("searchType");
+
+	    	 if(isEmpty(rowID)){
+	    		 // 수정할 회원을 선택하세요
+	    		 alert($("#managementusermodifyalertnotselect").val());
+	    		 }
+	    	 else {
+	    		 popupForm = createForm("userInfoAddPopupForm" , "popupForm");
+
+	    		 popupForm.hideItem("addBtn");
+
+	    		 popupForm.setItemValue("userId", userManageGrid.cells(rowID, 2).getValue());
+	    		 popupForm.setReadonly("userId", true);
+	    		 popupForm.setItemValue("userPw", userManageGrid.cells(rowID, 9).getValue());
+	    		 popupForm.setItemValue("pwConfirm", userManageGrid.cells(rowID, 10).getValue());
+	    		 popupForm.setItemValue("firstName", userManageGrid.cells(rowID, 3).getValue());
+	    		 popupForm.setItemValue("lastName", userManageGrid.cells(rowID, 4).getValue());
+	    		 popupForm.setItemValue("ext", userManageGrid.cells(rowID, 6).getValue());
+
+	    		 popupForm.attachEvent("onButtonClick", function(name){
+	    			 switch(name){
+	    			 case "modifyBtn" :
+	    				 if(validityCheck()){
+	    					 updateUserInfo(popupForm);
+		    				 userManageGrid.clearAndLoad(contextPath+"/userManageGrid.xml", function(){});
+		    			 }
+		    			 break;
+	    				 }
+	    			 });
+
+	    		 popupForm.attachEvent("onKeyDown",function(inp, ev, name){
+		    		 if(ev.keyCode == 13 && popupForm.isItemHidden("addBtn") == true){
+	    				 if( validityCheck()){
+	    					 updateUserInfo(popupForm);
+		    				 userManageGrid.clearAndLoad(contextPath+"/userManageGrid.xml", function(){});
+		    			 }
+		    		 }
+		    	});
+
+	    		 comboAuthorityLevel = popupForm.getCombo("authorityLevel");
+	    		 comboAuthorityLevel.load(contextPath+"/ticketComboOption.do?cType=A&selectedValue="+userManageGrid.cells(rowID, 8).getValue());
+	    		 comboAuthorityLevel.setSkin(skin);
+	    		 comboAuthorityLevel.enableAutocomplete();
+	    		 comboAuthorityLevel.readonly(true);
+
+	    		 searchSex = popupForm.getCombo("sex");
+	    		 searchSex.load(contextPath+"/ticketComboOption.do?cParentCode=sexSearchType&selectedValue="+userManageGrid.cells(rowID, 5).getValue());
+	    		 searchSex.setSkin(skin);
+	    		 searchSex.enableAutocomplete();
+	    		 searchSex.readonly(true);
+
+	    		 cpPopup("cp_popup_content");
+	    		 }
+	    	 break;
+
+	     case "deleteBtn":
+
+	    	 var checkedRowIDList = userManageGrid.getCheckedRows(0).split(",");
+
+	    	 if(checkedRowIDList[0] == "") {
+	    		 // 선택된 열이 없습니다.
+	    		 // 삭제할 열을 체크해주세요
+	    		 alert($("#managementuserdeletealertnotcheck").val());
+	    		 } else{
+	    		 //삭제 함수
+	    		 deleteUserInfo(checkedRowIDList);}
+	    	 break;
+	    	 }
+	     });
+
+	comboSearchCombo = userManageForm.getCombo("searchType")
+	comboSearchCombo.load(contextPath+"/ticketComboOption.do?cParentCode=manageSearchType&selectedValue=all");
+	comboSearchCombo.setSkin(skin);
+	comboSearchCombo.enableAutocomplete();
+	comboSearchCombo.readonly(true);
+
+
+	/** 엔터키 이벤트 처리*/
+	userManageForm.attachEvent("onKeyDown", function(inp, ev, name){
+		if(ev.keyCode == 13 && name == "searchWord"){
+			var keyword = userManageForm.getValue("searchWord");
+   			var comboValue = userManageForm.getValue("searchType");
+   			if(isEmpty(keyword)) {
+   				// 검색 목록 초기화
+   				userManageGrid.clearAndLoad(contextPath+"/userManageGrid.xml", function(){});
+   			} else {
+   				loadGrid(keyword, comboValue);
+   			}
+		}
+	});
+
+
+}
+
+/** 그리드 이벤트 정의 */
+function gridFunction(){
+
+	/* 그리드 내 콤보 수정 불가 처리 */
+	userManageGrid.attachEvent("onRowSelect" , function (id, ind){
+		userManageGrid.cells(id, 5).setDisabled(true);
+		userManageGrid.cells(id, 8).setDisabled(true);
+	});
+
+}
+
+/** 권한관리 연동*/
+function authorFunction(){
+
+	/* 저장/수정 권한 */
+	if ( modifyYn != 'Y'){
+		userManageForm.disableItem("modifyBtn");
+		userManageForm.disableItem("addBtn");
+	}
+
+	/* 삭제 권한 */
+	if ( deleteYn != 'Y' ){
+		userManageForm.disableItem("deleteBtn");
+	}
+}
+
+/** popupForm 빈 값 체크*/
+function validityCheck(){
+	if(popupForm.getItemValue("userId") == ""){
+		 alert("아이디를 입력하세요");
+		 popupForm.setItemFocus("userId");
+		 return false;
+	}else if(popupForm.getItemValue("userPw") == ""){
+		 alert("비밀번호를 입력하세요");
+		 popupForm.setItemFocus("userPw")
+		 return false;
+	}else if(popupForm.getItemValue("userPw") != popupForm.getItemValue("pwConfirm")){
+		 alert("비밀번호가 일치하지 않습니다");
+		 popupForm.setItemFocus("pwConfirm");
+		 popupForm.setItemValue("pwConfirm", "");
+		 return false;
+	}else if(popupForm.getItemValue("ext") == ""){
+		 alert("내선번호를 입력하세요");
+		 popupForm.setItemFocus("ext");
+		 return false;
+	}else if(popupForm.getItemValue("authorityLevel") == ""){
+		 alert("권한등급을 선택하세요");
+		 popupForm.getCombo("authorityLevel").openSelect();
+		 return false;
+	}else if(popupForm.getItemValue("lastName") == ""){
+		 alert("성을 입력하세요");
+		 popupForm.setItemFocus("lastName");
+		 return false;
+	}else if(popupForm.getItemValue("firstName") == ""){
+		 alert("이름을 입력하세요");
+		 popupForm.setItemFocus("firstName");
+		 return false;
+	}else if(popupForm.getItemValue("sex") == ""){
+		 alert("성별을 선택하세요");
+		 popupForm.getCombo("sex").openSelect();
+		 return false;
+	}else{
+		return true;
+	}
+}
+
+/** 콤보 리스트 불러오기*/
+function comboLoad(name, rowID){
+	if(name = "addBtn"){
+		comboAuthorityLevel = popupForm.getCombo("authorityLevel");
+  		comboAuthorityLevel.load(contextPath+"/ticketComboOption.do?cType=A");
+  		comboAuthorityLevel.setSkin(skin);
+  		comboAuthorityLevel.enableAutocomplete();
+  		comboAuthorityLevel.readonly(true);
+
+  		searchSex = popupForm.getCombo("sex");
+  		searchSex.load(contextPath+"/ticketComboOption.do?cParentCode=sexSearchType&selectedValue=");
+  		searchSex.setSkin(skin);
+  		searchSex.enableAutocomplete();
+  		searchSex.readonly(true);
+	}
+}
+
+/** 사용자정보 추가*/
+function insertUserInfo(popupForm){
+
+	var cUserId 			= popupForm.getItemValue("userId");
+	var cUserPw 			= popupForm.getItemValue("userPw");
+	var cExt 				= popupForm.getItemValue("ext"); //내선번호
+	var cFirstName 			= popupForm.getItemValue("firstName");
+	var cLastName			= popupForm.getItemValue("lastName");
+	var cSex				= popupForm.getCombo("sex").getSelectedValue();
+	var cUserLevel			= popupForm.getCombo("authorityLevel").getSelectedValue();
+
+	var dataStr = {
+		    "cUserId" 			:cUserId
+		,	"cUserPwd" 			:cUserPw
+		,	"cExt"       		:cExt
+		,	"cUserFirstName"	:cFirstName
+		,	"cUserLastName"		:cLastName
+		,	"cSex"				:cSex
+		,	"cUserLevel"		:cUserLevel
+	};
+	var resreceptNum = "";
+
+	$.ajax({
+		url:contextPath+"/insertUserInfo6.do",
+		data:dataStr,
+		type:"POST",
+		dataType:"json",
+		async: false,
+		success:function(jRes){
+
+			if(jRes.success == "Y") {
+				resreceptNum = jRes.result;
+				cp_popup_close();
+				userManageGrid.clearAndLoad(contextPath+"/userManageGrid.xml", function(){});
+			} else if(jRes.success == "N" || jRes.result == "") {
+				resCustomerCode = "";
+			}
+		}
+	});
+}
+
+/** 사용자정보 수정*/
+function updateUserInfo(popupForm){
+
+	var cUserId 			= popupForm.getItemValue("userId");
+	var cUserPw 			= popupForm.getItemValue("userPw");
+	var cExt 				= popupForm.getItemValue("ext"); //내선번호
+	var cFirstName 			= popupForm.getItemValue("firstName");
+	var cLastName			= popupForm.getItemValue("lastName");
+	var cSex				= popupForm.getCombo("sex").getSelectedValue();
+	var cUserLevel			= popupForm.getCombo("authorityLevel").getSelectedValue();
+
+	var dataStr = {
+		    "cUserId" 			:cUserId
+		,	"cUserPwd" 			:cUserPw
+		,	"cExt"       		:cExt
+		,	"cUserFirstName"	:cFirstName
+		,	"cUserLastName"		:cLastName
+		,	"cSex"				:cSex
+		,	"cUserLevel"		:cUserLevel
+	};
+	var resreceptNum = "";
+
+	$.ajax({
+		url:contextPath+"/updateUserInfo6.do",
+		data:dataStr,
+		type:"POST",
+		dataType:"json",
+		async: false,
+		success:function(jRes){
+
+			if(jRes.success == "Y") {
+				resreceptNum = jRes.result;
+				userManageGrid.clearAndLoad(contextPath+"/userManageGrid.xml", function(){});
+				cp_popup_close();
+			} else if(jRes.success == "N" || jRes.result == "") {
+				resCustomerCode = "";
+			}
+		}
+	});
+}
+
+/** 사용자 정보 삭제*/
+function deleteUserInfo(checkedRowIDList){
+	// 삭제할까요?
+
+	 // 체크된 열에서 아이디를 얻어내기
+	 var checkedUserIDList = [];
+	 $.each(checkedRowIDList, function(i, rowId) {
+		 // 체크된 row의 사용자 아이디(2)를 가져온다.
+		 var id = userManageGrid.cells(rowId, 2).getValue();
+		 checkedUserIDList.push(id);
+		 })
+
+		 // 얻어낸 아이디를 문자열로 조합하기
+		 var userIdListStr = "'" + checkedUserIDList.join("','") + "'"; 	// "'1','2','3'" 의 형태로 변환
+
+	 var confirmMsg = $("#managementuserdeleteconfirm").val().replace(/!%num%!/, checkedRowIDList.length);
+
+	 if(confirm(confirmMsg)) {
+		 $.ajax({
+			 url: contextPath + "/deleteUserInfo6.do",
+			 type: "GET",
+			 data: {cUserId: userIdListStr},
+			 dataType: "json",
+			 success: function(jRes) {
+				 if(jRes.success == "Y") {
+					 // 성공시 그리드 리로드
+					 userManageGrid.clearAndLoad(contextPath+"/userManageGrid.xml", function(){});
+				 }
+				 else if(jRes.success == "N" || jRes.result == "") {
+					 // 사용자 삭제에 실패했습니다.
+					 alert($("#managementuserdeletealertfailed").val());
+					 }
+				 }
+			 });
+		 }
+}
+
+function adminUserManageLoad(){
+
+	/* 달력 언어 설정 */
+	dhtmlXCalendarObject.prototype.lang = locale;
+
+	/* 달력 날짜 설정 */
+	$("#currentDateClock").val(currentDateClock);
+	$("#currentDate").val(currentDate);
+	$("#currentMonth").val(currentMonth);
+	$("#currentClock").val(currentClock);
+	$("#currentHourClock").val(currentHourClock);
+
+	/* 소메뉴 호출 */
+	adminToolbar();
+	/* 화면 호출 */
+	userManageForm = createForm("userManageForm", "userManageForm");
+
+	userManageGrid = createGrid("userManageGrid", "userManageGridPaging", "userManageGrid", "userManageGridList" );
+
+	/* 폼 기능 */
+	formFunction();
+
+	/* 그리드 기능 */
+	gridFunction();
+
+	/* 권한관리 연동*/
+	authorFunction();
+}
